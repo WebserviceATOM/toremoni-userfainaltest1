@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鉄道データBOX - マイページ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --line-green: #06C755; --main-blue: #007bff; --admin-red: #ff4d4d; }
+        body { font-family: -apple-system, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; color: #333; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 480px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h1 { text-align: center; font-size: 1.4rem; color: #333; margin-bottom: 25px; }
+        .card { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #eee; position: relative; }
+        .profile-flex { display: flex; align-items: center; gap: 15px; }
+        .avatar-frame { width: 65px; height: 65px; border-radius: 50%; overflow: hidden; background: #ddd; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .avatar-frame img { width: 100%; height: 100%; object-fit: cover; }
+        
+        button { width: 100%; padding: 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-google { background: #4285F4; color: white; }
+        .btn-x { background: #000; color: white; }
+        .btn-line { background: var(--line-green); color: white; }
+        .btn-save { background: #333; color: white; margin-top: 20px; font-size: 1rem; }
+        
+        input, select { width: 100%; padding: 10px; margin-top: 8px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; background: white; }
+        .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        .hidden { display: none; }
+        .admin-badge { background: var(--admin-red); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; position: absolute; top: 10px; right: 10px; }
+        .status-tag { display: inline-block; background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>鉄道データBOX</h1>
+
+    <!-- 1. ログイン画面 -->
+    <div id="ui-out">
+        <p style="text-align:center; color:#666;">アカウントを連携して開始</p>
+        <button class="btn-google" onclick="login('google')">Googleでログイン</button>
+        <button class="btn-x" onclick="login('twitter')">X(Twitter)でログイン</button>
+    </div>
+
+    <!-- 2. マイページ画面 -->
+    <div id="ui-in" class="hidden">
+        <div class="card">
+            <div id="admin-badge" class="admin-badge hidden">管理者</div>
+            <div class="profile-flex">
+                <div class="avatar-frame"><img id="v-avatar" src=""></div>
+                <div>
+                    <span class="status-tag" id="v-status">一般</span><br>
+                    <strong id="v-display-name">読み込み中...</strong><br>
+                    <small id="v-x-username" style="color:var(--main-blue);">@---</small><br>
+                    <small style="color:#999">No. <span id="v-no">----</span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE連携 -->
+        <div class="card" style="border: 1px solid var(--line-green); background: #f0fff4;">
+            <p style="margin:0; font-size:0.8rem; font-weight:bold;">管理用LINE通知（内部ID連携）</p>
+            <button class="btn-line" onclick="linkLine()">LINEと連携する</button>
+            <p style="font-size:0.6rem; color:#666; margin-top:5px;">※名前や写真は取得されません。通知のみに使用します。</p>
+        </div>
+
+        <!-- 各種設定 -->
+        <div class="card">
+            <h3 style="margin-top:0; font-size:1rem;">プロフィール設定</h3>
+            表示名: <input type="text" id="in-name">
+            アイコンURL: <input type="text" id="in-avatar" placeholder="https://...">
+            <p style="font-size:0.8rem; color:#666;">最後に見た路線: <b id="v-route" style="color:#333;">---</b></p>
+            
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+            
+            <h3 style="margin-top:0; font-size:1rem;">表示・車両設定</h3>
+            <div class="setting-item"><span>新車表示設定</span><select id="in-new"><option value="1">設定1</option><option value="2">設定2</option><option value="3">設定3</option></select></div>
+            <div class="setting-item"><span>廃車時期 (yyyy-MM)</span><input type="text" id="in-scrap" placeholder="2025-03" style="width:100px; margin-top:0;"></div>
+            <div class="setting-item"><span>所属を表示する</span><input type="checkbox" id="in-belonging" style="width:auto;"></div>
+            <div class="setting-item"><span>アイコンを表示する</span><input type="checkbox" id="in-icon" style="width:auto;"></div>
+            
+            <button class="btn-save" onclick="saveSettings()">設定を保存する</button>
+        </div>
+
+        <!-- 管理者専用パネル -->
+        <div id="ui-admin" class="card hidden" style="border: 1px solid var(--admin-red);">
+            <h3 style="color:var(--admin-red); margin-top:0;">管理者パネル</h3>
+            <div id="admin-list" style="font-size:0.8rem; max-height:200px; overflow-y:auto;"></div>
+        </div>
+
+        <button onclick="logout()" style="background:none; color:#999; text-decoration:underline; font-size:0.8rem; margin-top:20px;">ログアウト</button>
+    </div>
+</div>
+
+<script>
+    // --- 1. Supabaseの初期化 ---
+    const S_URL = "https://nnugdjrhmvbyjyibdaog.supabase.co";
+    const S_KEY = "sb_publishable_cOJy7k7tomsBgSaK-aMhBg_t42yNiip"; 
+    const supabase = window.supabase.createClient(S_URL, S_KEY);
+
+    // --- 2. 認証関係 ---
+    async function login(p) { 
+        await supabase.auth.signInWithOAuth({ 
+            provider: p, 
+            options: { redirectTo: window.location.origin } 
+        }); 
+    }
+    async function logout() { await supabase.auth.signOut(); location.reload(); }
+
+    // --- 3. LINE連携ボタン ---
+    async function linkLine() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return alert("ログインが必要です");
+        // LINE連携用URLへ飛ばす（現在のユーザーIDを荷物として持たせる）
+        window.location.href = `${S_URL}/functions/v1/line-auth?state=${user.id}`;
+    }
+
+    // --- 4. データの読み込み ---
+    async function loadProfile(user) {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (data) {
+            // プロフィール表示反映
+            document.getElementById('v-display-name').innerText = data.display_name;
+            document.getElementById('in-name').value = data.display_name;
+            document.getElementById('v-x-username').innerText = "@" + (data.x_username || "未設定");
+            document.getElementById('v-avatar').src = data.avatar_url || "https://via.placeholder.com/70";
+            document.getElementById('in-avatar').value = data.avatar_url || "";
+            document.getElementById('v-no').innerText = String(data.user_number).padStart(4, '0');
+            document.getElementById('v-status').innerText = data.status || "一般";
+            document.getElementById('v-route').innerText = data.last_viewed_route || "なし";
+
+            // 設定反映
+            document.getElementById('in-new').value = data.new_car_setting || 1;
+            document.getElementById('in-scrap').value = data.scrap_date || "";
+            document.getElementById('in-belonging').checked = data.show_belonging;
+            document.getElementById('in-icon').checked = data.show_icon;
+            
+            // 画面切り替え
+            document.getElementById('ui-out').classList.add('hidden');
+            document.getElementById('ui-in').classList.remove('hidden');
+
+            // 管理者チェック
+            if (data.status === '管理者') {
+                document.getElementById('admin-badge').classList.remove('hidden');
+                document.getElementById('ui-admin').classList.remove('hidden');
+                loadAdminList();
+            }
+        }
+    }
+
+    // --- 5. 設定の保存 ---
+    async function saveSettings() {
+        const { data: { user } } = await supabase.auth.getUser();
+        const updates = {
+            display_name: document.getElementById('in-name').value,
+            avatar_url: document.getElementById('in-avatar').value,
+            new_car_setting: parseInt(document.getElementById('in-new').value),
+            scrap_date: document.getElementById('in-scrap').value,
+            show_belonging: document.getElementById('in-belonging').checked,
+            show_icon: document.getElementById('in-icon').checked,
+            last_viewed_route: "南大阪線", // テスト用固定値。実際は各路線のページを開いた時にここを更新させる。
+            updated_at: new Date()
+        };
+        const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+        if (error) alert("保存エラー: " + error.message);
+        else { alert("設定を保存しました！"); location.reload(); }
+    }
+
+    // --- 6. 管理者用：ユーザー一覧取得 ---
+    async function loadAdminList() {
+        const { data } = await supabase.from('profiles').select('*').order('user_number', { ascending: true });
+        let html = "<b>登録ユーザー一覧:</b><br>";
+        data.forEach(u => {
+            html += `<div style="padding:5px; border-bottom:1px solid #eee;">No.${String(u.user_number).padStart(4, '0')}: ${u.display_name}</div>`;
+        });
+        document.getElementById('admin-list').innerHTML = html;
+    }
+
+    // 起動時の状態チェック
+    supabase.auth.onAuthStateChange((event, session) => {
+        if (session) loadProfile(session.user);
+    });
+</script>
+</body>
+</html>
