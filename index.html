@@ -32,7 +32,7 @@
     <div id="ui-out">
         <p style="text-align:center;">アカウントを連携して開始</p>
         <button class="btn-google" onclick="loginAction('google')">Googleでログイン</button>
-        <button class="btn-x" onclick="loginAction('twitter')">X(Twitter)でログイン</button>
+        <button class="btn-x" onclick="loginAction('x')">X(Twitter)でログイン</button>
     </div>
 
     <!-- ログイン後（マイページ） -->
@@ -92,7 +92,6 @@
     async function linkLineAction() {
         const { data: { user } } = await _client.auth.getUser();
         if (!user) return alert("ログインしてください");
-        // あなたの東京プロジェクトのEdge Functionへ飛ばす
         window.location.href = `${_SUB_URL}/functions/v1/line-auth?state=${user.id}`;
     }
 
