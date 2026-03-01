@@ -11,21 +11,20 @@ serve(async (req) => {
   const code = url.searchParams.get('code')
   const user_id = url.searchParams.get('state') 
   
+  // ★ここをあなたのNetlifyのURL（末尾に / なし）に書き換えてください！
   const NETLIFY_URL = "https://toremoni-testsite-fromgithub.netlify.app"; 
 
-  // --- A. LINEの許可画面へ飛ばす処理 ---
+  // --- 1. LINEのログイン画面へ飛ばす処理 ---
   if (!code) {
-    if (!user_id) return new Response("Error: No User ID provided", { status: 400 })
-    
+    if (!user_id) return new Response("Error: ユーザーIDが見つかりません", { status: 400 })
     const redirect_uri = `https://nnugdjrhmvbyjyibdaog.supabase.co/functions/v1/line-auth`
     
-    // scope=openid だけに指定。これで名前や写真は取得されず、内部IDのみ要求します。
+    // 内部ID(openid)のみを要求
     const authUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${line_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=openid&state=${user_id}&bot_prompt=normal`
-    
     return new Response(null, { status: 302, headers: { Location: authUrl } })
   }
 
-  // --- B. LINEから戻ってきた後の処理 ---
+  // --- 2. LINEから戻ってきた後の処理 ---
   try {
     const redirect_uri = `https://nnugdjrhmvbyjyibdaog.supabase.co/functions/v1/line-auth`
     
@@ -38,21 +37,25 @@ serve(async (req) => {
       }),
     })
     const tokenData = await tokenRes.json()
+    
+    // IDトークンから内部識別子を解析
     const payload = JSON.parse(atob(tokenData.id_token.split('.')[1]))
-    const line_user_id = payload.sub // 内部識別子(Uxxx...)
+    const line_user_id = payload.sub 
 
+    // Supabaseに管理者権限で接続して保存
     const supabase = createClient(supabase_url!, supabase_service_role!)
-    await supabase.from('profiles').update({ line_user_id: line_user_id }).eq('id', user_id)
+    const { error: dbError } = await supabase.from('profiles').update({ line_user_id: line_user_id }).eq('id', user_id)
 
-    if (error) {
-      if (error.code === '23505') return new Response("このLINEアカウントは既に連携済みです。", { status: 400 })
-      throw error
+    if (dbError) {
+      if (dbError.code === '23505') return new Response("このLINEは既に他のアカウントと連携済みです", { status: 400 })
+      throw dbError
     }
 
-    // 成功したらNetlifyへ戻す
+    // 【成功】Netlifyのマイページへ自動リダイレクト
     return new Response(null, { status: 302, headers: { Location: NETLIFY_URL } })
     
-  } catch (err) {
-    return new Response("Error: " + err.message, { status: 500 })
+  } catch (e) {
+    // 変数名を e に統一して「not defined」エラーを回避
+    return new Response("連携エラー: " + (e instanceof Error ? e.message : "不明なエラー"), { status: 500 })
   }
 })
