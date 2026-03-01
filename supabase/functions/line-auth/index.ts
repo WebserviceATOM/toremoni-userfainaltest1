@@ -11,14 +11,12 @@ serve(async (req) => {
   const code = url.searchParams.get('code')
   const user_id = url.searchParams.get('state') 
   
-  // ★重要：ここを自分のNetlifyのURLに書き換えてください（最後は / なし）
-  const NETLIFY_URL = "https://toremoni-testsite.netlify.app"; 
+  const NETLIFY_URL = "https://toremoni-testsite-fromgithub.netlify.app"; 
 
   // --- A. LINEの許可画面へ飛ばす処理 ---
   if (!code) {
     if (!user_id) return new Response("Error: No User ID provided", { status: 400 })
     
-    // 東京プロジェクトIDを使ったリダイレクト先
     const redirect_uri = `https://nnugdjrhmvbyjyibdaog.supabase.co/functions/v1/line-auth`
     
     // scope=openid だけに指定。これで名前や写真は取得されず、内部IDのみ要求します。
